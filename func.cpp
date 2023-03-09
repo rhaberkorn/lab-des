@@ -7,7 +7,7 @@
 #include<bitset>
 #include "des.h"
 
-    using namespace std;
+using namespace std;
 
 DES::DES()
 = default;
@@ -20,7 +20,8 @@ bitset<32> DES::F(bitset<32> R, bitset<48> k) {
     // Расширение электронного блока
     bitset<48> expandR;
     for (int i = 0; i < 48; i++)
-        expandR[47 - i] = R[32 - E[i]];  //expandR[i] = R[E[i] - 1];
+        expandR[47 - i] = R[32 - E[i]];
+    //cout << "E: " << expandR << endl;
     // XOR
     expandR = expandR ^ k;
     // вместо этого S-поле
@@ -28,47 +29,30 @@ bitset<32> DES::F(bitset<32> R, bitset<48> k) {
     int x = 0;
     for (int i = 0; i < 48; i = i + 6)
     {
-        int row = expandR[i] * 2 + expandR[i + 5];
-        int col = expandR[i + 1] * 8 + expandR[i + 2] * 4 + expandR[i + 3] * 2 + expandR[i + 4];
-        int num = S_BOX[i / 6][row][col];
-        bitset<4> temp(num);
-        output[x + 3] = temp[0];
-        output[x + 2] = temp[1];
-        output[x + 1] = temp[2];
-        output[x] = temp[3];
+        int row = ((int)expandR[i+5] << 1) | expandR[i];
+        int col = (expandR >> (i+1)).to_ulong() & 0xF;
+        int num = S_BOX[7 - i/6][row][col];
+        bitset<4> temp(num); // FIXME
+        output[x + 3] = temp[3];
+        output[x + 2] = temp[2];
+        output[x + 1] = temp[1];
+        output[x + 0] = temp[0];
         x += 4;
     }
+    //cout << "S: " << output << endl;
     // Замена P-бокса
     bitset<32> tmp = output;
     for (int i = 0; i < 32; i++)
-        output[i] = tmp[P[i] - 1];
+        output[31 - i] = tmp[32 - P[i]];
+    //cout << "P: " << output << endl;
 
     return output;
 }
 // Функция сдвига влево
+// NOTE: Это операция обычно называется left rotation!
 bitset<28> DES::leftshift(bitset<28> k, int shift) {
-    bitset<28> temp = k;
-    if (shift == 1)
-    {
-        for (int i = 0; i < 27; i++)
-        {
-            if (i - shift < 0)
-                k[i - shift + 28] = temp[i];
-            else
-                k[i] = temp[i + shift];
-        }
-    }
-    if (shift == 2)
-    {
-        for (int i = 0; i < 26; i++)
-        {
-            if (i - shift < 0)
-                k[i - shift + 28] = temp[i];
-            else
-                k[i] = temp[i + shift];
-        }
-    }
-    return k;
+//    return (k >> shift) | (k << (28 - shift));
+    return (k << shift) | (k >> (28 - shift));
 }
 
 void DES::generateKeys() {
@@ -80,29 +64,30 @@ void DES::generateKeys() {
     // Во-первых, после выбора и замены ПК-1 удаляем 8-битный бит четности исходного ключа
     // И переставляем
     for (int i = 0; i < 56; i++)
-        real_key[i] = key[PC_1[i] - 1];
+        real_key[55 - i] = key[64 - PC_1[i]];
+
+    // NOTE: Обычно real_key[0] == младший разряд
+    for (int i = 0; i < 28; i++)
+        right[i] = real_key[i];
+    for (int i = 28; i < 56; i++)
+        left[i - 28] = real_key[i];
 
     for (int round = 0; round < 16; round++)
     {
-        for (int i = 0; i < 28; i++)
-            left[i] = real_key[i];
-        for (int i = 28; i < 56; i++)
-            right[i - 28] = real_key[i];
         // Сдвиг влево
         left = leftshift(left, shiftBits[round]);
         right = leftshift(right, shiftBits[round]);
         // Подключаем, заменяем и выбираем ПК-2 для перестановки и сжатия
         for (int i=0; i < 28; i++)
-            real_key[i] = left[i];
+            real_key[i] = right[i];
         for (int i = 28; i < 56; i++)
-            real_key[i] = right[i - 28];
+            real_key[i] = left[i - 28];
         for (int i = 0; i < 48; i++)
-        {
-            int m = PC_2[i];
-            compressKey[i] = real_key[m - 1];
-        }
+            compressKey[47 - i] = real_key[56 - PC_2[i]];
 
         subkey[round] = compressKey;
+
+	//cout << "K" << (round+1) << ": " << subkey[round] << endl;
     }
 
 }
@@ -110,7 +95,8 @@ void DES::generateKeys() {
 
 // Функция инструмента: преобразовать массив символов char в двоичный
 bitset<64> DES::char_to_bit(const char s[8]) {
-    bitset<64> bits;
+    bitset<64> bits(htobe64(*(uint64_t *)s));
+#if 0
     int x = 0;
     for (int i = 0; i < 8; i++)
     {
@@ -122,118 +108,70 @@ bitset<64> DES::char_to_bit(const char s[8]) {
         }
         x += 8;
     }
-
-    return bits;
-}
-// Функция инструмента: выполнить двоичное обратное преобразование
-bitset<64> DES::change(bitset<64> temp) {
-    bitset<64> bits;
-    bitset<8> n;
-    for (int i = 0; i < 64; i = i + 8)
-    {
-        for (int j = 0; j < 8; j++)
-        {
-            bits[i + j] = temp[i + 7 - j];
-        }
-    }
+#endif
     return bits;
 }
 
-bitset<64> DES::DES_encryp(bitset<64> &plain) {
+bitset<64> DES::transcrypt(bitset<64> &plain, bool decrypt) {
     bitset<64> cipher;
     bitset<64> currentBits;
     bitset<32> left;
     bitset<32> right;
-    bitset<32> newLeft;
     // Первоначальная замена IP
     for (int i = 0; i < 64; i++)
-        currentBits[i] = plain[IP[i] - 1];//
+        currentBits[63 - i] = plain[64 - IP[i]];
+    //cout << "IP: " << currentBits << endl;
 
     for (int i = 0; i < 32; i++)
-        left[i] = currentBits[i];
+        right[i] = currentBits[i];
     for (int i = 32; i < 64; i++)
-        right[i - 32] = currentBits[i];
+        left[i - 32] = currentBits[i];
     // Вводим 16 раундов изменения
-    for (auto round : subkey)
+    for (int i = 0; i < 16; i++)
     {
-        newLeft = right;
-        right = left ^ F(right, round);
-        left = newLeft;
+        bitset<48> key = decrypt ? subkey[15-i] : subkey[i];
+
+        bitset<32> oldLeft = left;
+        left = right;
+        right = oldLeft ^ F(right, key);
+
+        //cout << "R: " << right << endl;
     }
-    // Слияние
+    // Слияние: как раз сначала right и потом left!
     for (int i = 0; i < 32; i++)
-        cipher[i] = right[i];
+        cipher[i] = left[i];
     for (int i = 32; i < 64; i++)
-        cipher[i] = left[i - 32];
+        cipher[i] = right[i - 32];
     // Обратная инициализация замены
     currentBits = cipher;
+
     for (int i = 0; i < 64; i++)
-        cipher[i] = currentBits[IP_1[i] - 1];
+        cipher[63 - i] = currentBits[64 - IP_1[i]];
 
     return cipher;
 }
 
-bitset<64> DES::DES_decrypt(bitset<64> & cipher) {
-    bitset<64> plain;
-    bitset<64> currentBits;
-    bitset<32> left;
-    bitset<32> right;
-    bitset<32> newLeft;
-    // Заменить IP
-    for (int i = 0; i < 64; i++)
-        currentBits[i] = cipher[IP[i] - 1];
-
-    for (int i = 0; i < 32; i++)
-        left[i] = currentBits[i];
-    for (int i = 32; i < 64; i++)
-        right[i - 32] = currentBits[i];
-    // Вводим 16 итераций (подключи применяются в обратном порядке)
-    for (int round = 0; round < 16; round++)
-    {
-        newLeft = right;
-        right = left ^ F(right, subkey[15 - round]);
-        left = newLeft;
-    }
-    // Слияние
-    for (int i = 0; i < 32; i++)
-        plain[i] = right[i];
-    for (int i = 32; i < 64; i++)
-        plain[i] = left[i - 32];
-    // Обратная инициализация замены
-    currentBits = plain;
-    for (int i = 0; i < 64; i++)
-        plain[i] = currentBits[IP_1[i] - 1];
-
-    return plain;
-}
-
+static_assert(sizeof(uint64_t) == sizeof(unsigned long long));
 
 void DES::show_encryp() {
     bitset<64> plain = char_to_bit(s.c_str());
     key = char_to_bit(k.c_str());
+    cout << "Plain: " << plain << endl << "K: " << key << endl;
     // Создание 16 подключей
     generateKeys();
     // зашифрованный текст в 1.txt
-    bitset<64> cipher = DES_encryp(plain);
+    bitset<64> cipher = transcrypt(plain, false);
+    cout << "Cipher: " << cipher << endl;
     fstream file1;
-    file1.open("/Users/a8752355675/CLionProjects/untitled2/1.txt", ios::binary | ios::out);
-    file1.write((char*)&cipher, sizeof(cipher));
+    file1.open("1.txt", ios::binary | ios::out);
+    uint64_t cipher_uint = htobe64(cipher.to_ullong());
+    file1.write((char*)&cipher_uint, sizeof(cipher_uint));
     file1.close();
-}
 
-void DES::show_decrypt() {
-    // читаем файл
-    bitset<64> temp;
+    plain = transcrypt(cipher, true);
     fstream file2;
-    file2.open("/Users/a8752355675/CLionProjects/untitled2/1.txt", ios::binary | ios::in);
-    file2.read((char *) &temp, sizeof(temp));
-    file2.close();
-
-    // дешифр и в файл 2.txt
-    bitset<64> temp_plain = DES_decrypt(temp);
-    bitset<64> temp_1 = change(temp_plain);
-
-    file2.open("/Users/a8752355675/CLionProjects/untitled2/2.txt", ios::binary | ios::out);
-    file2.write((char *) &temp_1, sizeof(temp_1) );
+    file2.open("2.txt", ios::binary | ios::out);
+    uint64_t plain_uint = htobe64(plain.to_ullong());
+    file2.write((char*)&plain_uint, sizeof(plain_uint));
     file2.close();
 }

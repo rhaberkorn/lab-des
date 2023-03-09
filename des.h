@@ -17,13 +17,10 @@ public:
     static bitset <28> leftshift (bitset <28> k, int); // функция сдвига влево
     void generateKeys (); // Генерировать 16 48-битных подключей
     static bitset <64> char_to_bit (const char s [8]); // Преобразование символов char в двоичные
-    static bitset<64> change(bitset<64> temp);
-    bitset <64> DES_encryp (bitset <64> & plain); // шифрование DES
-    bitset <64> DES_decrypt (bitset <64> & cipher); // Расшифровка DES
+    bitset <64> transcrypt(bitset <64> & plain, bool decrypt);
     void get_s (string str) {s = std::move(str);} // Получить открытый текст
     void get_key (string key_t) {k = std::move(key_t);} // Получаем ключ
     void show_encryp();
-    void show_decrypt();
     DES();
     ~DES();
 private:
